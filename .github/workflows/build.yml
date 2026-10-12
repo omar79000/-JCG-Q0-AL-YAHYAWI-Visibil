@@ -1,4 +1,4 @@
-Name: Build AL-YAHYAWI JCG Q20
+name: Build AL-YAHYAWI JCG Q20
 
 on:
   workflow_dispatch:
