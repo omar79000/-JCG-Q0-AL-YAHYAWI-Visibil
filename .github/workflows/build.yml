@@ -1,0 +1,118 @@
+
+name: Build AL-YAHYAWI JCG Q20
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential ccache ecj \
+            fastjar file g++ gawk gettext git java-propose-classpath \
+            libelf-dev libncurses5-dev libncursesw5-dev \
+            libssl-dev python3 python3-distutils python3-setuptools \
+            python3-dev rsync subversion swig time unzip wget \
+            xsltproc zlib1g-dev curl xz-utils
+
+      - name: Download ImageBuilder
+        run: |
+          set -eux
+          URL="https://downloads.immortalwrt.org/releases/23.05.2/targets/ramips/mt7621/immortalwrt-imagebuilder-23.05.2-ramips-mt7621.Linux-x86_64.tar.xz"
+          curl -fL --retry 3 "$URL" -o imagebuilder.tar.xz
+          mkdir imagebuilder
+          tar -xJf imagebuilder.tar.xz -C imagebuilder --strip-components=1
+          cd imagebuilder
+          make info | tee profiles.txt
+          grep -i 'jcg_q20-pb-boot' profiles.txt
+
+      - name: Create first-boot configuration
+        run: |
+          mkdir -p imagebuilder/files/etc/uci-defaults
+          cat > imagebuilder/files/etc/uci-defaults/99-al-yahyawi <<'SCRIPT'
+          #!/bin/sh
+          exec >/tmp/al-yahyawi-setup.log 2>&1
+
+          uci set system.@system[0].hostname='AL-YAHYAWI-OPENWRT'
+          uci set system.@system[0].description='اليحيوي للتجارة ومستلزمات الشبكات'
+          uci commit system
+
+          cat > /etc/banner <<'EOF'
+          ================================================
+          اليحيوي للتجارة ومستلزمات الشبكات
+          AL-YAHYAWI-OPENWRT - JCG Q20
+          ================================================
+          EOF
+
+          uci -q set dhcp.lan.ignore='1'
+          uci -q set dhcp.lan.ra='disabled'
+          uci -q set dhcp.lan.dhcpv6='disabled'
+          uci -q set dhcp.lan.ndp='disabled'
+          uci commit dhcp
+
+          for service in firewall dnsmasq odhcpd; do
+            if [ -x "/etc/init.d/$service" ]; then
+              /etc/init.d/"$service" stop 2>/dev/null
+              /etc/init.d/"$service" disable 2>/dev/null
+            fi
+          done
+
+          if uci -q get wireless.radio0 >/dev/null; then
+            uci set wireless.radio0.disabled='0'
+            uci set wireless.radio0.country='PA'
+            uci set wireless.radio0.channel='11'
+            uci set wireless.radio0.htmode='HT20'
+            uci -q delete wireless.radio0.txpower
+          fi
+
+          if uci -q get wireless.default_radio0 >/dev/null; then
+            uci set wireless.default_radio0.ssid='AL-YAHYAWI-2.4G'
+            uci set wireless.default_radio0.beacon_int='50'
+            uci set wireless.default_radio0.dtim_period='1'
+            uci set wireless.default_radio0.disassoc_low_ack='0'
+            uci set wireless.default_radio0.isolate='0'
+          fi
+
+          if uci -q get wireless.radio1 >/dev/null; then
+            uci set wireless.radio1.disabled='0'
+            uci set wireless.radio1.country='PA'
+            uci set wireless.radio1.channel='36'
+            uci set wireless.radio1.htmode='VHT20'
+            uci -q delete wireless.radio1.txpower
+          fi
+
+          if uci -q get wireless.default_radio1 >/dev/null; then
+            uci set wireless.default_radio1.ssid='AL-YAHYAWI-5G'
+            uci set wireless.default_radio1.beacon_int='100'
+            uci set wireless.default_radio1.dtim_period='2'
+            uci set wireless.default_radio1.disassoc_low_ack='0'
+            uci set wireless.default_radio1.isolate='0'
+          fi
+
+          uci commit wireless
+          logger -t al-yahyawi "First boot configuration completed"
+          exit 0
+          SCRIPT
+          chmod 0755 imagebuilder/files/etc/uci-defaults/99-al-yahyawi
+
+      - name: Build firmware
+        run: |
+          set -eux
+          cd imagebuilder
+          make image \
+            PROFILE="jcg_q20-pb-boot" \
+            PACKAGES="luci-theme-argon lldpd luci-app-lldpd tcpdump ethtool" \
+            FILES="files"
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: AL-YAHYAWI-JCG-Q20-firmware
+          path: imagebuilder/bin/targets/ramips/mt7621/*sysupgrade.bin
+          if-no-files-found: error
