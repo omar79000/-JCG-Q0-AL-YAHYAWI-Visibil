@@ -3,7 +3,6 @@ name: Build AL-YAHYAWI JCG Q20 High-Power
 on:
   workflow_dispatch:
 
-
 permissions:
   contents: read
 
@@ -143,19 +142,18 @@ jobs:
             PACKAGES="luci-theme-argon lldpd luci-app-lldpd tcpdump ethtool kmod-mt7915e -dnsmasq -firewall4 -odhcpd-ipv6only -wireless-regdb" \
             FILES="files"
 
-      - name: Verify and rename output
+      - name: Verify and copy all outputs
         run: |
           set -euxo pipefail
           mkdir -p output
-          IMAGE="$(find imagebuilder/bin/targets/ramips/mt7621 -maxdepth 1 -type f -name '*sysupgrade.bin' | head -n 1)"
-          test -n "$IMAGE"
-          cp "$IMAGE" output/AL-YAHYAWI-JCG-Q20-sysupgrade.bin
-          sha256sum output/AL-YAHYAWI-JCG-Q20-sysupgrade.bin
-          ls -lh output/AL-YAHYAWI-JCG-Q20-sysupgrade.bin
+          # نسخ كافة الملفات الناتجة للجهاز لضمان توفر ملف الـ Factory/PB-Boot المناسب للتفليش المباشر
+          cp -v imagebuilder/bin/targets/ramips/mt7621/*jcg_q20* output/ || cp -v imagebuilder/bin/targets/ramips/mt7621/*.bin output/
+          sha256sum output/*
+          ls -lh output/
 
-      - name: Upload firmware
+      - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: AL-YAHYAWI-JCG-Q20-firmware
-          path: output/AL-YAHYAWI-JCG-Q20-sysupgrade.bin
+          name: AL-YAHYAWI-JCG-Q20-Firmware-Package
+          path: output/
           if-no-files-found: error
