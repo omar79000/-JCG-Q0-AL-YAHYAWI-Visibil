@@ -79,13 +79,11 @@ jobs:
               option resourcebase '/luci-static/resources'
           EOF
 
-          # 5. سكربت التشغيل التلقائي لاكتشاف كروت الواي فاي الحقيقية ومنع تكرارها وتطبيق الطاقة القصوى
+          # 5. سكربت إجبار الطاقة عبر محرك iw المباشر عند كل إقلاع
           cat > imagebuilder/files/etc/uci-defaults/99-extreme-wifi <<'EOF'
           #!/bin/sh
-          # التعرف التلقائي على هاردوير الكروت لمنع ظهور راديوهات وهمية
           wifi config
 
-          # تطبيق إعدادات الطاقة القصوى وأسماء الشبكات على الكروت المكتشفة فعلياً
           uci -q batch <<'EOU'
           set wireless.radio0.disabled='0'
           set wireless.radio0.country='PA'
@@ -98,8 +96,8 @@ jobs:
 
           set wireless.radio1.disabled='0'
           set wireless.radio1.country='PA'
-          set wireless.radio1.channel='149'
-          set wireless.radio1.htmode='HE40'
+          set wireless.radio1.channel='36'
+          set wireless.radio1.htmode='HE20'
           set wireless.radio1.txpower='30'
           set wireless.default_radio1.ssid='AL-YAHYAWI-EXTREME-5G'
           set wireless.default_radio1.encryption='none'
@@ -107,7 +105,11 @@ jobs:
           commit wireless
           EOU
 
+          # تطبيق الأوامر المباشرة على الطبقة الفيزيائية للراديو (Phy)
           iw reg set PA || true
+          iw phy phy0 set txpower fixed 3000 || true
+          iw phy phy1 set txpower fixed 3000 || true
+
           wifi reload
           exit 0
           EOF
@@ -126,7 +128,6 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p output
-          # نسخ كافة الملفات الناتجة للجهاز لضمان توفر ملف الـ Factory/PB-Boot المناسب للتفليش المباشر
           cp -v imagebuilder/bin/targets/ramips/mt7621/*jcg_q20* output/ || cp -v imagebuilder/bin/targets/ramips/mt7621/*.bin output/
           sha256sum output/*
           ls -lh output/
