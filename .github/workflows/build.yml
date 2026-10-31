@@ -1,4 +1,4 @@
-name: Build AL-YAHYAWI JCG Q20 High-Power
+name: Build AL-YAHYAWI JCG Q20 Extreme Power
 
 on:
   workflow_dispatch:
@@ -9,6 +9,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    timeout-minutes: 90
 
     steps:
       - name: Install tools
@@ -36,8 +37,8 @@ jobs:
           # 1. إعدادات النظام واسم الجهاز
           cat > imagebuilder/files/etc/config/system <<'EOF'
           config system
-              option hostname 'AL-YAHYAWI-OPENWRT'
-              option description 'اليحيوي للتجارة ومستلزمات الشبكات'
+              option hostname 'AL-YAHYAWI-EXTREME'
+              option description 'اليحيوي للتجارة ومستلزمات الشبكات - قدرة قصوى'
               option timezone 'UTC'
               option zonename 'UTC'
               option log_size '64'
@@ -55,59 +56,12 @@ jobs:
           cat > imagebuilder/files/etc/banner <<'EOF'
           ================================================
           اليحيوي للتجارة ومستلزمات الشبكات
-          AL-YAHYAWI-OPENWRT - HIGH POWER EDITION
+          AL-YAHYAWI-OPENWRT - EXTREME HIGH POWER EDITION
           JCG Q20 (PB-Boot) | ALYAHYAWIWRT
           ================================================
           EOF
 
-          # 3. إعدادات الواي فاي المتقدمة لأعلى قدرة بث واستقرار ميداني
-          cat > imagebuilder/files/etc/config/wireless <<'EOF'
-          config wifi-device 'radio0'
-              option type 'mac80211'
-              option band '2g'
-              option channel '11'
-              option htmode 'HE20'
-              option country 'PA'
-              option txpower '30'
-              option disabled '0'
-              option cell_density '0'
-              option coverage_class '0'
-
-          config wifi-iface 'default_radio0'
-              option device 'radio0'
-              option network 'lan'
-              option mode 'ap'
-              option ssid 'AL-YAHYAWI-2.4G'
-              option encryption 'none'
-              option beacon_int '50'
-              option dtim_period '1'
-              option disassoc_low_ack '0'
-              option isolate '0'
-
-          config wifi-device 'radio1'
-              option type 'mac80211'
-              option band '5g'
-              option channel '149'
-              option htmode 'HE40'
-              option country 'PA'
-              option txpower '30'
-              option disabled '0'
-              option cell_density '0'
-              option coverage_class '0'
-
-          config wifi-iface 'default_radio1'
-              option device 'radio1'
-              option network 'lan'
-              option mode 'ap'
-              option ssid 'AL-YAHYAWI-5G'
-              option encryption 'none'
-              option beacon_int '100'
-              option dtim_period '2'
-              option disassoc_low_ack '0'
-              option isolate '0'
-          EOF
-
-          # 4. تعطيل الـ DHCP للعمل كـ Bridge/Access Point
+          # 3. تعطيل الـ DHCP للعمل كـ Bridge/Access Point
           cat > imagebuilder/files/etc/config/dhcp <<'EOF'
           config dhcp 'lan'
               option interface 'lan'
@@ -117,7 +71,7 @@ jobs:
               option ndp 'disabled'
           EOF
 
-          # 5. واجهة Argon
+          # 4. واجهة Argon
           cat > imagebuilder/files/etc/config/luci <<'EOF'
           config core 'main'
               option lang 'auto'
@@ -125,13 +79,39 @@ jobs:
               option resourcebase '/luci-static/resources'
           EOF
 
-          # 6. سكربت لتجاوز قيود تعريف mt76 وضبط النطاق الجغرافي عند الإقلاع الأول
-          cat > imagebuilder/files/etc/uci-defaults/99-override-txpower <<'EOF'
+          # 5. سكربت التشغيل التلقائي لاكتشاف كروت الواي فاي الحقيقية ومنع تكرارها وتطبيق الطاقة القصوى
+          cat > imagebuilder/files/etc/uci-defaults/99-extreme-wifi <<'EOF'
           #!/bin/sh
-          iw reg set PA
+          # التعرف التلقائي على هاردوير الكروت لمنع ظهور راديوهات وهمية
+          wifi config
+
+          # تطبيق إعدادات الطاقة القصوى وأسماء الشبكات على الكروت المكتشفة فعلياً
+          uci -q batch <<'EOU'
+          set wireless.radio0.disabled='0'
+          set wireless.radio0.country='PA'
+          set wireless.radio0.channel='11'
+          set wireless.radio0.htmode='HE20'
+          set wireless.radio0.txpower='30'
+          set wireless.default_radio0.ssid='AL-YAHYAWI-EXTREME-2.4G'
+          set wireless.default_radio0.encryption='none'
+          set wireless.default_radio0.disassoc_low_ack='0'
+
+          set wireless.radio1.disabled='0'
+          set wireless.radio1.country='PA'
+          set wireless.radio1.channel='149'
+          set wireless.radio1.htmode='HE40'
+          set wireless.radio1.txpower='30'
+          set wireless.default_radio1.ssid='AL-YAHYAWI-EXTREME-5G'
+          set wireless.default_radio1.encryption='none'
+          set wireless.default_radio1.disassoc_low_ack='0'
+          commit wireless
+          EOU
+
+          iw reg set PA || true
+          wifi reload
           exit 0
           EOF
-          chmod +x imagebuilder/files/etc/uci-defaults/99-override-txpower
+          chmod +x imagebuilder/files/etc/uci-defaults/99-extreme-wifi
 
       - name: Build firmware
         run: |
@@ -139,7 +119,7 @@ jobs:
           cd imagebuilder
           make image \
             PROFILE="jcg_q20-pb-boot" \
-            PACKAGES="luci-theme-argon lldpd luci-app-lldpd tcpdump ethtool kmod-mt7915e -dnsmasq -firewall4 -odhcpd-ipv6only -wireless-regdb" \
+            PACKAGES="luci-theme-argon lldpd luci-app-lldpd tcpdump ethtool kmod-mt7915e kmod-mt6 iw hostapd-utils iperf3 bash -dnsmasq -firewall4 -odhcpd-ipv6only -wireless-regdb" \
             FILES="files"
 
       - name: Verify and copy all outputs
