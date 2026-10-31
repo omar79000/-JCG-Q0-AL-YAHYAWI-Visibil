@@ -119,7 +119,7 @@ jobs:
           cd imagebuilder
           make image \
             PROFILE="jcg_q20-pb-boot" \
-            PACKAGES="luci-theme-argon lldpd luci-app-lldpd tcpdump ethtool kmod-mt7915e kmod-mt6 iw hostapd-utils iperf3 bash -dnsmasq -firewall4 -odhcpd-ipv6only -wireless-regdb" \
+            PACKAGES="luci-theme-argon lldpd luci-app-lldpd tcpdump ethtool kmod-mt7915e kmod-mt76 iw hostapd-utils iperf3 bash -dnsmasq -firewall4 -odhcpd-ipv6only -wireless-regdb" \
             FILES="files"
 
       - name: Verify and copy all outputs
